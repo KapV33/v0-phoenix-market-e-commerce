@@ -1,0 +1,74 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerClient } from "@/lib/supabase/server"
+
+export async function GET(request: NextRequest, { params }: { params: { conversationId: string } }) {
+  try {
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
+    const { data: messages, error } = await supabase
+      .from("messages")
+      .select(`
+        *,
+        users(username)
+      `)
+      .eq("conversation_id", params.conversationId)
+      .order("created_at", { ascending: true })
+
+    if (error) throw error
+
+    return NextResponse.json({ messages })
+  } catch (error: any) {
+    console.error("Failed to fetch messages:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest, { params }: { params: { conversationId: string } }) {
+  try {
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    }
+
+    const { message } = await request.json()
+
+    // Determine sender type
+    const { data: isVendor } = await supabase.from("vendors").select("id").eq("user_id", user.id).single()
+
+    const { data: isAdmin } = await supabase.from("admins").select("id").eq("id", user.id).single()
+
+    const senderType = isAdmin ? "admin" : isVendor ? "vendor" : "user"
+
+    // Insert message
+    const { error } = await supabase.from("messages").insert({
+      conversation_id: params.conversationId,
+      sender_id: user.id,
+      sender_type: senderType,
+      message,
+    })
+
+    if (error) throw error
+
+    // Update conversation timestamp
+    await supabase
+      .from("conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", params.conversationId)
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error("Failed to send message:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
