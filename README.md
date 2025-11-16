@@ -153,4 +153,4 @@ Required environment variables (automatically configured in v0):
 For issues or questions, refer to the inline documentation in the code or check the admin dashboard for system status.
 \`\`\`
 
-```json file="" isHidden
+\`\`\`json file="" isHidden
