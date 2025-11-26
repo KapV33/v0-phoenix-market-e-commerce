@@ -27,39 +27,27 @@ export interface BTCPrice {
 // Get current BTC to USD conversion rate
 export async function getBTCPrice(): Promise<BTCPrice> {
   try {
-    // Use NOWPayments API for real BTC price
-    if (NOWPAYMENTS_API_KEY && NOWPAYMENTS_API_KEY !== "demo_key") {
-      const response = await fetch(`${NOWPAYMENTS_API_URL}/estimate?amount=1&currency_from=usd&currency_to=btc`, {
-        headers: {
-          "x-api-key": NOWPAYMENTS_API_KEY,
-        },
-      })
-      
-      if (response.ok) {
+    const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", {
+      headers: {
+        Accept: "application/json",
+      },
+    })
+
+    if (response.ok) {
+      const contentType = response.headers.get("content-type")
+      if (contentType && contentType.includes("application/json")) {
         const data = await response.json()
-        const btcAmount = data.estimated_amount
-        const usdPrice = btcAmount > 0 ? 1 / btcAmount : 98500
-        return {
-          usd: usdPrice,
-          updated: new Date(),
+        if (data && data.bitcoin && data.bitcoin.usd) {
+          return {
+            usd: data.bitcoin.usd,
+            updated: new Date(),
+          }
         }
       }
     }
-    
-    // Fallback to CoinGecko for price (free API)
-    const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
-    if (response.ok) {
-      const data = await response.json()
-      return {
-        usd: data.bitcoin.usd,
-        updated: new Date(),
-      }
-    }
-    
-    // Final fallback
+
     return { usd: 98500, updated: new Date() }
   } catch (error) {
-    console.error("Failed to fetch BTC price:", error)
     return { usd: 98500, updated: new Date() }
   }
 }
@@ -67,7 +55,7 @@ export async function getBTCPrice(): Promise<BTCPrice> {
 // Create a payment invoice for depositing BTC
 export async function createDepositInvoice(
   userId: string,
-  amountUSD: number
+  amountUSD: number,
 ): Promise<{ invoiceId: string; btcAddress: string; btcAmount: number }> {
   try {
     const btcPrice = await getBTCPrice()
@@ -101,7 +89,8 @@ export async function verifyBTCTransaction(txHash: string, expectedAmount: numbe
     if (NOWPAYMENTS_API_KEY && NOWPAYMENTS_API_KEY !== "demo_key") {
       // NOWPayments doesn't have direct tx verification, but you can check payment status
       // For now, basic validation
-      if (txHash.length >= 64) { // Bitcoin transaction hashes are 64 characters
+      if (txHash.length >= 64) {
+        // Bitcoin transaction hashes are 64 characters
         console.log("[v0] NOWPayments: Valid transaction hash format")
         return true
       }
