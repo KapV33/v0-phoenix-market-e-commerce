@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowDownLeft, ArrowUpRight, Copy, CheckCircle, Bitcoin, AlertCircle } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Bitcoin, ExternalLink, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface Transaction {
   id: string
@@ -28,16 +29,27 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [depositAmountUSD, setDepositAmountUSD] = useState("")
-  const [copied, setCopied] = useState(false)
   const [btcPrice, setBtcPrice] = useState(98500)
-  const [invoice, setInvoice] = useState<DepositInvoice | null>(null)
-  const [txHash, setTxHash] = useState("")
-  const [confirming, setConfirming] = useState(false)
+  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
+  const [invoiceData, setInvoiceData] = useState<any>(null)
+  const [creating, setCreating] = useState(false)
+  const [minAmount, setMinAmount] = useState(10)
 
   useEffect(() => {
     fetchWalletData()
     fetchBTCPrice()
+    fetchMinAmount()
   }, [])
+
+  const fetchMinAmount = async () => {
+    try {
+      const res = await fetch("/api/wallet/min-amount")
+      const data = await res.json()
+      setMinAmount(data.minAmount || 10)
+    } catch (error) {
+      console.error("Failed to fetch min amount:", error)
+    }
+  }
 
   const fetchBTCPrice = async () => {
     try {
@@ -68,22 +80,18 @@ export default function WalletPage() {
     }
   }
 
-  const handleCopyAddress = async (address: string) => {
-    try {
-      await navigator.clipboard.writeText(address)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (error) {
-      alert("Failed to copy address")
-    }
-  }
-
   const handleCreateDeposit = async () => {
     if (!depositAmountUSD || Number.parseFloat(depositAmountUSD) <= 0) {
       alert("Please enter a valid amount")
       return
     }
 
+    if (Number.parseFloat(depositAmountUSD) < minAmount) {
+      alert(`Minimum deposit amount is $${minAmount}`)
+      return
+    }
+
+    setCreating(true)
     try {
       const response = await fetch("/api/wallet/deposit/create", {
         method: "POST",
@@ -92,46 +100,24 @@ export default function WalletPage() {
         body: JSON.stringify({ amountUSD: Number.parseFloat(depositAmountUSD) }),
       })
 
-      if (!response.ok) throw new Error("Failed to create deposit")
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create deposit")
+      }
 
       const data = await response.json()
-      setInvoice(data)
-    } catch (error) {
-      alert("Failed to create deposit invoice")
+      setInvoiceUrl(data.invoiceUrl)
+      setInvoiceData(data)
+    } catch (error: any) {
+      alert(error.message || "Failed to create deposit invoice")
+    } finally {
+      setCreating(false)
     }
   }
 
-  const handleConfirmDeposit = async () => {
-    if (!invoice || !txHash) {
-      alert("Please enter transaction hash")
-      return
-    }
-
-    setConfirming(true)
-    try {
-      const response = await fetch("/api/wallet/deposit/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          txHash,
-          btcAmount: invoice.btcAmount,
-          invoiceId: invoice.invoiceId,
-        }),
-      })
-
-      if (!response.ok) throw new Error("Failed to confirm deposit")
-
-      const data = await response.json()
-      alert(`Deposit confirmed! Added $${data.depositedUSD.toFixed(2)} to your wallet.`)
-      setInvoice(null)
-      setTxHash("")
-      setDepositAmountUSD("")
-      fetchWalletData()
-    } catch (error) {
-      alert("Failed to confirm deposit. Please contact support if you sent the payment.")
-    } finally {
-      setConfirming(false)
+  const handleOpenInvoice = () => {
+    if (invoiceUrl) {
+      window.open(invoiceUrl, "_blank")
     }
   }
 
@@ -152,7 +138,7 @@ export default function WalletPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold text-gray-900">My Wallet</h1>
-            <p className="text-gray-600">Deposit Bitcoin and manage your USD credits</p>
+            <p className="text-gray-600">Deposit Bitcoin via NOWPayments</p>
           </div>
           <Bitcoin className="h-12 w-12 text-orange-500" />
         </div>
@@ -178,13 +164,19 @@ export default function WalletPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-gray-900">Deposit Bitcoin</CardTitle>
-                <CardDescription>
-                  Send BTC to receive USD credits. All deposits go to admin wallet: 1LBRp7sGy4uzfkPqSwov2CAKzNKgHtxPRw
-                </CardDescription>
+                <CardDescription>Deposit via NOWPayments - Secure, instant BTC payments</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {!invoice ? (
+                {!invoiceUrl ? (
                   <div className="space-y-4">
+                    <Alert className="bg-blue-50 border-blue-200">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-gray-700">
+                        Minimum deposit: <strong>${minAmount}</strong>. Payments are processed instantly via
+                        NOWPayments.
+                      </AlertDescription>
+                    </Alert>
+
                     <div className="space-y-2">
                       <Label htmlFor="amount" className="text-gray-900">
                         Amount to Deposit (USD)
@@ -193,113 +185,77 @@ export default function WalletPage() {
                         id="amount"
                         type="number"
                         step="0.01"
+                        min={minAmount}
                         value={depositAmountUSD}
                         onChange={(e) => setDepositAmountUSD(e.target.value)}
-                        placeholder="Enter amount in USD"
+                        placeholder={`Enter amount (min $${minAmount})`}
                         className="bg-gray-50"
                       />
-                      {depositAmountUSD && (
+                      {depositAmountUSD && Number.parseFloat(depositAmountUSD) >= minAmount && (
                         <p className="text-xs text-gray-600">
-                          You will send: {(Number.parseFloat(depositAmountUSD) / btcPrice).toFixed(8)} BTC
+                          Approximately: {(Number.parseFloat(depositAmountUSD) / btcPrice).toFixed(8)} BTC
                         </p>
                       )}
                     </div>
                     <Button
                       onClick={handleCreateDeposit}
+                      disabled={creating || !depositAmountUSD || Number.parseFloat(depositAmountUSD) < minAmount}
                       className="w-full phoenix-gradient text-white font-semibold phoenix-glow"
                     >
-                      Create Deposit Invoice
+                      {creating ? "Creating Invoice..." : "Create Payment Invoice"}
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-6 space-y-4">
-                      <div className="flex items-center gap-2 text-orange-800">
-                        <AlertCircle className="h-5 w-5" />
-                        <span className="font-semibold">Payment Details</span>
+                    <Alert className="bg-green-50 border-green-300">
+                      <Bitcoin className="h-5 w-5 text-green-600" />
+                      <AlertDescription className="text-gray-700">
+                        <strong>Payment invoice created!</strong> Click below to complete your payment via NOWPayments.
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="border-2 border-orange-300 rounded-lg p-6 space-y-4 bg-popover">
+                      <div>
+                        <Label className="text-gray-900 font-semibold">Amount:</Label>
+                        <p className="text-2xl font-bold text-gray-900">${invoiceData.amountUSD.toFixed(2)} USD</p>
                       </div>
 
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-gray-900 text-sm font-semibold">Send exactly:</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Input
-                              value={`${invoice.btcAmount.toFixed(8)} BTC`}
-                              readOnly
-                              className="font-mono text-base bg-white"
-                            />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleCopyAddress(invoice.btcAmount.toString())}
-                            >
-                              {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <Label className="text-gray-900 text-sm font-semibold">To this address:</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Input value={invoice.btcAddress} readOnly className="font-mono text-sm bg-white" />
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleCopyAddress(invoice.btcAddress)}
-                            >
-                              {copied ? <CheckCircle className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="pt-2">
-                          <p className="text-sm text-gray-700">
-                            <strong>USD Value:</strong> ${invoice.amountUSD.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            After sending, enter your transaction hash below to confirm.
-                          </p>
-                        </div>
+                      <div>
+                        <Label className="text-gray-900 font-semibold">Payment Currency:</Label>
+                        <p className="text-lg text-gray-700 uppercase">{invoiceData.payCurrency}</p>
                       </div>
+
+                      <Button
+                        onClick={handleOpenInvoice}
+                        className="w-full phoenix-gradient text-white font-semibold phoenix-glow"
+                        size="lg"
+                      >
+                        <ExternalLink className="mr-2 h-5 w-5" />
+                        Pay with NOWPayments
+                      </Button>
                     </div>
 
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="txhash" className="text-gray-900">
-                          Transaction Hash
-                        </Label>
-                        <Input
-                          id="txhash"
-                          value={txHash}
-                          onChange={(e) => setTxHash(e.target.value)}
-                          placeholder="Enter your BTC transaction hash"
-                          className="font-mono text-sm bg-gray-50"
-                        />
-                        <p className="text-xs text-gray-600">
-                          Find this in your wallet after sending the payment. For testing, use: simulated_tx_123456
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          onClick={handleConfirmDeposit}
-                          disabled={!txHash || confirming}
-                          className="flex-1 phoenix-gradient text-white font-semibold phoenix-glow"
-                        >
-                          {confirming ? "Confirming..." : "Confirm Deposit"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setInvoice(null)
-                            setTxHash("")
-                          }}
-                          className="border-gray-300"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                    <div className="space-y-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setInvoiceUrl(null)
+                          setInvoiceData(null)
+                          setDepositAmountUSD("")
+                        }}
+                        className="w-full border-gray-300"
+                      >
+                        Create New Invoice
+                      </Button>
                     </div>
+
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="text-sm text-gray-700">
+                        After completing payment, your wallet will be automatically credited. This usually takes a few
+                        minutes.
+                      </AlertDescription>
+                    </Alert>
                   </div>
                 )}
 
@@ -307,15 +263,15 @@ export default function WalletPage() {
                   <div className="flex items-start gap-3">
                     <Bitcoin className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div className="space-y-2 text-sm">
-                      <p className="font-semibold text-gray-900">How deposits work:</p>
+                      <p className="font-semibold text-gray-900">How NOWPayments deposits work:</p>
                       <ol className="list-decimal list-inside space-y-1 text-gray-700">
                         <li>Enter the USD amount you want to deposit</li>
-                        <li>Send the exact BTC amount to the provided address</li>
-                        <li>Enter your transaction hash to confirm</li>
-                        <li>Your wallet will be credited in USD after verification</li>
+                        <li>Click "Create Payment Invoice" to generate a NOWPayments invoice</li>
+                        <li>Complete the payment on the NOWPayments secure page</li>
+                        <li>Your wallet is automatically credited after payment confirmation</li>
                       </ol>
                       <p className="text-xs text-gray-600 mt-2">
-                        All deposits are sent to the marketplace admin wallet for security.
+                        NOWPayments is a trusted crypto payment processor with instant confirmations.
                       </p>
                     </div>
                   </div>

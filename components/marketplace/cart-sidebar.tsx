@@ -54,7 +54,7 @@ export function CartSidebar({ items, onRemoveItem, onUpdateQuantity }: CartSideb
             <>
               <div className="flex-1 overflow-auto space-y-4">
                 {items.map((item) => (
-                  <div key={item.product.id} className="flex gap-4 p-4 bg-muted/50 rounded-lg border border-border">
+                  <div key={item.product.id} className="flex gap-4 p-4 rounded-lg border border-border bg-gray-50">
                     <div className="w-20 h-20 bg-background rounded-lg overflow-hidden flex-shrink-0">
                       {item.product.image_url ? (
                         <img
@@ -107,7 +107,7 @@ export function CartSidebar({ items, onRemoveItem, onUpdateQuantity }: CartSideb
               </div>
               <div className="border-t border-border pt-4 mt-4 space-y-4">
                 <div className="flex items-center justify-between text-lg font-bold">
-                  <span className="text-foreground">Total:</span>
+                  <span className="text-primary-foreground">Total:</span>
                   <span className="phoenix-gradient-text text-2xl">${total.toFixed(2)}</span>
                 </div>
                 <Button

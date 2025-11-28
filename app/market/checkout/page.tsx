@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Flame, ArrowLeft, Wallet, ShoppingCart } from 'lucide-react'
+import { Flame, ArrowLeft, Wallet, ShoppingCart } from "lucide-react"
 import type { CartItem } from "@/lib/marketplace"
 
 export default function CheckoutPage() {
@@ -25,17 +25,25 @@ export default function CheckoutPage() {
       router.push("/market")
     }
 
-    // Fetch wallet balance
     fetch("/api/wallet", {
-      credentials: "include"
+      credentials: "include",
     })
-      .then(res => res.json())
-      .then(data => {
-        if (data.balance) {
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch wallet")
+        }
+        return res.json()
+      })
+      .then((data) => {
+        console.log("[v0] Wallet data:", data)
+        if (typeof data.balance === "number") {
           setWalletBalance(data.balance)
         }
       })
-      .catch(() => {})
+      .catch((error) => {
+        console.error("[v0] Failed to fetch wallet:", error)
+        setWalletBalance(0)
+      })
   }, [router])
 
   const total = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
@@ -74,7 +82,7 @@ export default function CheckoutPage() {
 
       // Clear cart
       localStorage.removeItem("phoenix_cart")
-      
+
       alert("Orders placed successfully! Check your orders page for delivery.")
       router.push("/market/orders")
     } catch (error: any) {
@@ -99,7 +107,11 @@ export default function CheckoutPage() {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Button variant="ghost" onClick={() => router.push("/market")} className="mb-6 text-foreground hover:text-foreground/80">
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/market")}
+          className="mb-6 text-foreground hover:text-foreground/80"
+        >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Market
         </Button>
@@ -151,7 +163,7 @@ export default function CheckoutPage() {
                 <div className="border-t border-white/10 pt-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-white">Balance After:</span>
-                    <span className={`text-lg font-bold ${hasInsufficientBalance ? 'text-red-400' : 'text-green-400'}`}>
+                    <span className={`text-lg font-bold ${hasInsufficientBalance ? "text-red-400" : "text-green-400"}`}>
                       ${(walletBalance - total).toFixed(2)}
                     </span>
                   </div>
@@ -161,12 +173,13 @@ export default function CheckoutPage() {
               {hasInsufficientBalance && (
                 <div className="bg-red-500/10 p-3 rounded-lg border border-red-500/20">
                   <p className="text-sm text-white">
-                    <strong>Insufficient Balance:</strong> You need ${(total - walletBalance).toFixed(2)} more to complete this purchase.
+                    <strong>Insufficient Balance:</strong> You need ${(total - walletBalance).toFixed(2)} more to
+                    complete this purchase.
                   </p>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="mt-2 w-full border-red-500/30 text-white hover:bg-red-500/10"
+                    className="mt-2 w-full border-red-500/30 text-white hover:bg-red-500/10 bg-transparent"
                     onClick={() => router.push("/wallet")}
                   >
                     Top Up Wallet
@@ -195,7 +208,8 @@ export default function CheckoutPage() {
 
               <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/20">
                 <p className="text-xs text-white">
-                  <strong>Secure Payment:</strong> Your payment is protected by our escrow system. Funds are only released to the vendor after you confirm delivery.
+                  <strong>Secure Payment:</strong> Your payment is protected by our escrow system. Funds are only
+                  released to the vendor after you confirm delivery.
                 </p>
               </div>
             </CardContent>

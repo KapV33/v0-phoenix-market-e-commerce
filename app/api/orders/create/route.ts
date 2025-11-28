@@ -46,14 +46,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
     }
 
-    // Get commission settings
-    const { data: globalCommission } = await supabase
+    const { data: commissionSettings, error: commissionError } = await supabase
       .from("commission_settings")
       .select("commission_percentage")
       .eq("setting_type", "global")
-      .single()
+      .limit(1)
+      .maybeSingle()
 
-    const commissionRate = globalCommission?.commission_percentage || 10
+    if (commissionError) {
+      console.error("[v0] Commission settings query error:", commissionError)
+    }
+
+    const commissionRate = commissionSettings?.commission_percentage || 10
     const commissionAmount = (product.price * commissionRate) / 100
     const vendorAmount = product.price - commissionAmount
 

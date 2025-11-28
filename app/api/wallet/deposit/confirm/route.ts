@@ -1,9 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
-import { verifyBTCTransaction, convertBTCtoUSD } from "@/lib/nowpayments"
 
 export async function POST(request: NextRequest) {
+  return NextResponse.json(
+    {
+      error:
+        "Manual confirmation is deprecated. NOWPayments handles payment confirmation automatically via IPN callbacks.",
+      message: "Please use the NOWPayments invoice system instead.",
+    },
+    { status: 400 },
+  )
+
+  // Original code below is now deprecated and should not be executed
+  /*
   try {
     const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
@@ -73,4 +81,5 @@ export async function POST(request: NextRequest) {
     console.error("Failed to confirm deposit:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  */
 }

@@ -14,16 +14,26 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("orders")
-      .select("*")
+      .select(`
+        *,
+        escrow:escrows(id, status, auto_finalize_at, amount)
+      `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
 
     if (error) {
+      console.error("[v0] Error fetching orders:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data || [])
+    const transformedData = data?.map((order: any) => ({
+      ...order,
+      escrow: order.escrow?.[0] || null,
+    }))
+
+    return NextResponse.json(transformedData || [])
   } catch (error) {
+    console.error("[v0] Failed to fetch orders:", error)
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 })
   }
 }

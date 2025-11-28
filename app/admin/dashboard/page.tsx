@@ -358,9 +358,9 @@ export default function AdminDashboardPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold text-lg text-foreground">{category.name}</h3>
-                        <p className="text-sm text-foreground/70">{category.description}</p>
-                        <p className="text-xs text-foreground/50 mt-1">Slug: {category.slug}</p>
+                        <h3 className="font-semibold text-lg text-white">{category.name}</h3>
+                        <p className="text-sm text-primary">{category.description}</p>
+                        <p className="text-xs mt-1 text-accent">Slug: {category.slug}</p>
                       </div>
                       <div className="flex gap-2">
                         <CategoryFormDialog

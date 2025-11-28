@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { createDepositInvoice } from "@/lib/nowpayments"
+import { createPaymentInvoice, getMinimumPaymentAmount } from "@/lib/nowpayments"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,15 +17,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 })
     }
 
-    // Create deposit invoice
-    const invoice = await createDepositInvoice(userId, amountUSD)
+    const minAmount = await getMinimumPaymentAmount()
+    if (amountUSD < minAmount) {
+      return NextResponse.json({ error: `Minimum deposit amount is $${minAmount}` }, { status: 400 })
+    }
+
+    const invoice = await createPaymentInvoice(userId, amountUSD)
 
     return NextResponse.json({
       success: true,
-      invoiceId: invoice.invoiceId,
-      btcAddress: invoice.btcAddress,
-      btcAmount: invoice.btcAmount,
-      amountUSD,
+      invoiceId: invoice.id,
+      invoiceUrl: invoice.invoice_url,
+      orderId: invoice.order_id,
+      amountUSD: amountUSD,
+      payCurrency: invoice.pay_currency,
     })
   } catch (error: any) {
     console.error("Failed to create deposit invoice:", error)

@@ -1,117 +1,200 @@
 // NOWPayments API integration for crypto payments
-// Admin BTC Wallet: 1LBRp7sGy4uzfkPqSwov2CAKzNKgHtxPRw
+// Official API documentation: https://documenter.getpostman.com/view/7907941/2s93JusNJt
 
-const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY || "demo_key"
+const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1"
-const ADMIN_BTC_ADDRESS = "1LBRp7sGy4uzfkPqSwov2CAKzNKgHtxPRw"
 
-export interface PaymentInvoice {
+if (!NOWPAYMENTS_API_KEY) {
+  throw new Error("NOWPAYMENTS_API_KEY environment variable is not set")
+}
+
+export interface NOWPaymentsInvoice {
   id: string
-  payment_id: string
-  pay_address: string
-  pay_amount: number
-  pay_currency: string
-  price_amount: number
-  price_currency: string
+  token_id: string
   order_id: string
-  payment_status: string
+  order_description: string
+  price_amount: string
+  price_currency: string
+  pay_currency: string
+  ipn_callback_url: string
+  invoice_url: string
+  success_url: string
+  cancel_url: string
   created_at: string
   updated_at: string
 }
 
-export interface BTCPrice {
-  usd: number
-  updated: Date
+export interface PaymentStatus {
+  payment_id: string
+  payment_status: string
+  pay_address: string
+  price_amount: number
+  price_currency: string
+  pay_amount: number
+  pay_currency: string
+  order_id: string
+  created_at: string
+  updated_at: string
 }
 
-// Get current BTC to USD conversion rate
-export async function getBTCPrice(): Promise<BTCPrice> {
+export async function getAvailableCurrencies(): Promise<string[]> {
   try {
-    const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd", {
+    const response = await fetch(`${NOWPAYMENTS_API_URL}/currencies`, {
       headers: {
-        Accept: "application/json",
+        "x-api-key": NOWPAYMENTS_API_KEY!,
       },
     })
 
-    if (response.ok) {
-      const contentType = response.headers.get("content-type")
-      if (contentType && contentType.includes("application/json")) {
-        const data = await response.json()
-        if (data && data.bitcoin && data.bitcoin.usd) {
-          return {
-            usd: data.bitcoin.usd,
-            updated: new Date(),
-          }
-        }
-      }
+    if (!response.ok) {
+      console.error("Failed to fetch currencies from NOWPayments")
+      return ["btc"] // Default to BTC
     }
 
-    return { usd: 98500, updated: new Date() }
+    const data = await response.json()
+    return data.currencies || ["btc"]
   } catch (error) {
-    return { usd: 98500, updated: new Date() }
+    console.error("Error fetching NOWPayments currencies:", error)
+    return ["btc"]
   }
 }
 
-// Create a payment invoice for depositing BTC
-export async function createDepositInvoice(
+export async function createPaymentInvoice(
   userId: string,
   amountUSD: number,
-): Promise<{ invoiceId: string; btcAddress: string; btcAmount: number }> {
+  orderId?: string,
+): Promise<NOWPaymentsInvoice> {
   try {
-    const btcPrice = await getBTCPrice()
-    const btcAmount = amountUSD / btcPrice.usd
+    const invoiceOrderId = orderId || `deposit_${userId}_${Date.now()}`
 
-    // For demo purposes, we'll use the admin address directly
-    // In production, you'd create unique deposit addresses via NOWPayments
-    const invoiceId = `deposit_${userId}_${Date.now()}`
-
-    return {
-      invoiceId,
-      btcAddress: ADMIN_BTC_ADDRESS,
-      btcAmount,
+    const requestBody = {
+      price_amount: amountUSD,
+      price_currency: "usd",
+      pay_currency: "btc", // Only accept Bitcoin
+      order_id: invoiceOrderId,
+      order_description: `Wallet deposit for user ${userId}`,
+      ipn_callback_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/api/wallet/ipn`,
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/wallet?status=success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/wallet?status=cancelled`,
+      is_fixed_rate: true,
+      is_fee_paid_by_user: false, // Merchant pays the fees
     }
+
+    console.log("[v0] Creating NOWPayments invoice:", requestBody)
+
+    const response = await fetch(`${NOWPAYMENTS_API_URL}/invoice`, {
+      method: "POST",
+      headers: {
+        "x-api-key": NOWPAYMENTS_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("NOWPayments API error:", errorText)
+      throw new Error(`NOWPayments API error: ${response.status} - ${errorText}`)
+    }
+
+    const invoice = await response.json()
+    console.log("[v0] NOWPayments invoice created:", invoice.id)
+
+    return invoice
   } catch (error) {
-    console.error("Failed to create deposit invoice:", error)
-    throw new Error("Failed to create deposit invoice")
+    console.error("Failed to create NOWPayments invoice:", error)
+    throw error
   }
 }
 
-// Verify a Bitcoin transaction (simplified version)
+export async function getPaymentStatus(paymentId: string): Promise<PaymentStatus> {
+  try {
+    const response = await fetch(`${NOWPAYMENTS_API_URL}/payment/${paymentId}`, {
+      headers: {
+        "x-api-key": NOWPAYMENTS_API_KEY!,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get payment status: ${response.status}`)
+    }
+
+    const status = await response.json()
+    return status
+  } catch (error) {
+    console.error("Failed to get payment status:", error)
+    throw error
+  }
+}
+
+export async function getMinimumPaymentAmount(currency = "btc"): Promise<number> {
+  try {
+    const response = await fetch(`${NOWPAYMENTS_API_URL}/min-amount?currency_from=${currency}&currency_to=usd`, {
+      headers: {
+        "x-api-key": NOWPAYMENTS_API_KEY!,
+      },
+    })
+
+    if (!response.ok) {
+      return 10 // Default minimum $10
+    }
+
+    const data = await response.json()
+    return data.min_amount || 10
+  } catch (error) {
+    return 10
+  }
+}
+
+export async function getEstimatedPrice(amountUSD: number, currency = "btc"): Promise<number> {
+  try {
+    const response = await fetch(
+      `${NOWPAYMENTS_API_URL}/estimate?amount=${amountUSD}&currency_from=usd&currency_to=${currency}`,
+      {
+        headers: {
+          "x-api-key": NOWPAYMENTS_API_KEY!,
+        },
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error("Failed to get estimate")
+    }
+
+    const data = await response.json()
+    return data.estimated_amount
+  } catch (error) {
+    console.error("Failed to get price estimate:", error)
+    // Fallback to CoinGecko
+    const btcPrice = await getBTCPriceFromCoinGecko()
+    return amountUSD / btcPrice
+  }
+}
+
+// Fallback BTC price from CoinGecko
+async function getBTCPriceFromCoinGecko(): Promise<number> {
+  try {
+    const response = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
+    const data = await response.json()
+    return data?.bitcoin?.usd || 98500
+  } catch {
+    return 98500
+  }
+}
+
+export async function getBTCPrice(): Promise<{ usd: number; updated: Date }> {
+  const price = await getBTCPriceFromCoinGecko()
+  return {
+    usd: price,
+    updated: new Date(),
+  }
+}
+
 export async function verifyBTCTransaction(txHash: string, expectedAmount: number): Promise<boolean> {
-  try {
-    // For demo/testing, allow simulated transactions
-    if (txHash.startsWith("simulated_")) {
-      console.log("[v0] NOWPayments: Demo transaction accepted")
-      return true
-    }
-
-    // In production with real API key, verify via NOWPayments
-    if (NOWPAYMENTS_API_KEY && NOWPAYMENTS_API_KEY !== "demo_key") {
-      // NOWPayments doesn't have direct tx verification, but you can check payment status
-      // For now, basic validation
-      if (txHash.length >= 64) {
-        // Bitcoin transaction hashes are 64 characters
-        console.log("[v0] NOWPayments: Valid transaction hash format")
-        return true
-      }
-    }
-
-    // Basic validation for production
-    return txHash.length >= 20
-  } catch (error) {
-    console.error("Failed to verify transaction:", error)
-    return false
-  }
+  console.warn("[v0] verifyBTCTransaction is deprecated - NOWPayments handles verification automatically")
+  return false
 }
 
-// Convert BTC amount to USD
 export async function convertBTCtoUSD(btcAmount: number): Promise<number> {
-  const price = await getBTCPrice()
-  return btcAmount * price.usd
-}
-
-// Convert USD amount to BTC
-export async function convertUSDtoBTC(usdAmount: number): Promise<number> {
-  const price = await getBTCPrice()
-  return usdAmount / price.usd
+  const price = await getBTCPriceFromCoinGecko()
+  return btcAmount * price
 }
