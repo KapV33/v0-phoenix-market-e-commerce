@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowDownLeft, ArrowUpRight, Bitcoin, ExternalLink, AlertCircle } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, AlertCircle, X, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { SUPPORTED_CRYPTOS, type CryptoInfo } from "@/lib/nowpayments"
+import Image from "next/image"
+import { PageHeader } from "@/components/layout/page-header"
 
 interface Transaction {
   id: string
@@ -17,302 +19,291 @@ interface Transaction {
   description: string | null
 }
 
-interface DepositInvoice {
-  invoiceId: string
-  btcAddress: string
-  btcAmount: number
-  amountUSD: number
-}
-
 export default function WalletPage() {
+  console.log("[v0] WalletPage rendering")
+
   const [balance, setBalance] = useState(0)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [depositAmountUSD, setDepositAmountUSD] = useState("")
-  const [btcPrice, setBtcPrice] = useState(98500)
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
-  const [invoiceData, setInvoiceData] = useState<any>(null)
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [minAmount, setMinAmount] = useState(10)
+  const [selectedCrypto, setSelectedCrypto] = useState<CryptoInfo>(SUPPORTED_CRYPTOS[0])
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    console.log("[v0] WalletPage mounted")
     fetchWalletData()
-    fetchBTCPrice()
     fetchMinAmount()
   }, [])
+
+  const fetchWalletData = async () => {
+    console.log("[v0] Fetching wallet data...")
+    try {
+      const res = await fetch("/api/wallet")
+      console.log("[v0] Wallet response status:", res.status)
+      const data = await res.json()
+      console.log("[v0] Wallet data received:", data)
+
+      setBalance(data.balance || 0)
+      setTransactions(data.transactions || [])
+      setError(null)
+    } catch (err) {
+      console.error("[v0] Wallet fetch error:", err)
+      setError("Failed to load wallet data")
+      setBalance(0)
+      setTransactions([])
+    } finally {
+      setLoading(false)
+      console.log("[v0] Wallet fetch complete")
+    }
+  }
 
   const fetchMinAmount = async () => {
     try {
       const res = await fetch("/api/wallet/min-amount")
       const data = await res.json()
       setMinAmount(data.minAmount || 10)
-    } catch (error) {
-      console.error("Failed to fetch min amount:", error)
-    }
-  }
-
-  const fetchBTCPrice = async () => {
-    try {
-      const res = await fetch("/api/wallet/btc-price")
-      const data = await res.json()
-      setBtcPrice(data.usd)
-    } catch (error) {
-      console.error("Failed to fetch BTC price:", error)
-    }
-  }
-
-  const fetchWalletData = async () => {
-    try {
-      const [walletRes, transactionsRes] = await Promise.all([
-        fetch("/api/wallet", { credentials: "include" }),
-        fetch("/api/wallet/transactions", { credentials: "include" }),
-      ])
-
-      const walletData = await walletRes.json()
-      const transactionsData = await transactionsRes.json()
-
-      setBalance(walletData.balance || 0)
-      setTransactions(transactionsData.transactions || [])
-    } catch (error) {
-      console.error("Failed to fetch wallet data:", error)
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      console.error("[v0] Failed to fetch min amount:", err)
+      setMinAmount(10)
     }
   }
 
   const handleCreateDeposit = async () => {
-    if (!depositAmountUSD || Number.parseFloat(depositAmountUSD) <= 0) {
-      alert("Please enter a valid amount")
-      return
-    }
-
-    if (Number.parseFloat(depositAmountUSD) < minAmount) {
-      alert(`Minimum deposit amount is $${minAmount}`)
+    const amount = Number.parseFloat(depositAmountUSD)
+    if (isNaN(amount) || amount < minAmount) {
+      alert(`Minimum deposit is $${minAmount}`)
       return
     }
 
     setCreating(true)
+    setError(null)
+
     try {
-      const response = await fetch("/api/wallet/deposit/create", {
+      const res = await fetch("/api/wallet/deposit/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ amountUSD: Number.parseFloat(depositAmountUSD) }),
+        body: JSON.stringify({
+          amountUSD: amount,
+          payCurrency: selectedCrypto.id,
+        }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create deposit")
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || "Failed to create deposit")
       }
 
-      const data = await response.json()
+      const data = await res.json()
+      console.log("[v0] Deposit invoice created:", data)
+
       setInvoiceUrl(data.invoiceUrl)
-      setInvoiceData(data)
-    } catch (error: any) {
-      alert(error.message || "Failed to create deposit invoice")
+      setShowInvoiceModal(true)
+      setDepositAmountUSD("")
+    } catch (err: any) {
+      console.error("[v0] Error creating deposit:", err)
+      setError(err.message || "Failed to create deposit invoice")
     } finally {
       setCreating(false)
     }
   }
 
-  const handleOpenInvoice = () => {
-    if (invoiceUrl) {
-      window.open(invoiceUrl, "_blank")
-    }
+  const closeInvoiceModal = () => {
+    setShowInvoiceModal(false)
+    setInvoiceUrl(null)
+    fetchWalletData()
   }
 
-  const getTransactionIcon = (type: string) => {
-    if (type === "deposit") return <ArrowDownLeft className="h-4 w-4 text-green-500" />
-    return <ArrowUpRight className="h-4 w-4 text-red-500" />
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#1a1f2e]">
+        <PageHeader title="Wallet" />
+        <div className="container mx-auto px-4 py-8 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        </div>
+      </div>
+    )
   }
 
-  const getTransactionColor = (type: string) => {
-    return type === "deposit" ? "text-green-500" : "text-red-500"
-  }
-
-  const balanceInBTC = balance / btcPrice
+  console.log("[v0] Rendering wallet content, balance:", balance)
 
   return (
-    <div className="min-h-screen bg-white p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900">My Wallet</h1>
-            <p className="text-gray-600">Deposit Bitcoin via NOWPayments</p>
-          </div>
-          <Bitcoin className="h-12 w-12 text-orange-500" />
-        </div>
+    <div className="min-h-screen bg-[#1a1f2e] text-white">
+      <PageHeader title="Wallet" />
 
-        <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-yellow-50">
+      <div className="container mx-auto px-4 py-8">
+        {error && (
+          <Alert className="mb-6 bg-red-900/20 border-red-900 text-white">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Balance Card */}
+        <Card className="mb-8 bg-[#2a3142] border-orange-500/20">
           <CardHeader>
-            <CardTitle className="text-gray-900">Available Balance</CardTitle>
+            <CardTitle className="text-white">Balance</CardTitle>
+            <CardDescription className="text-gray-400">Your available wallet balance</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold phoenix-gradient-text">${balance.toFixed(2)} USD</p>
-            <p className="text-2xl text-gray-600 mt-2">≈ {balanceInBTC.toFixed(8)} BTC</p>
-            <p className="text-sm text-gray-500 mt-1">BTC Price: ${btcPrice.toLocaleString()}</p>
+            <div className="text-4xl font-bold text-orange-500">${balance.toFixed(2)}</div>
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="deposit">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="deposit">Deposit BTC</TabsTrigger>
-            <TabsTrigger value="history">Transaction History</TabsTrigger>
-          </TabsList>
+        {/* Deposit Card */}
+        <Card className="mb-8 bg-[#2a3142] border-orange-500/20">
+          <CardHeader>
+            <CardTitle className="text-white">Deposit Funds</CardTitle>
+            <CardDescription className="text-gray-400">
+              Choose a cryptocurrency and deposit to your wallet
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Crypto Selection */}
+            <div>
+              <Label className="text-white mb-3 block">Select Cryptocurrency</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {SUPPORTED_CRYPTOS.map((crypto) => (
+                  <button
+                    key={crypto.id}
+                    onClick={() => setSelectedCrypto(crypto)}
+                    className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all ${
+                      selectedCrypto.id === crypto.id
+                        ? "border-orange-500 bg-orange-500/10"
+                        : "border-gray-700 bg-[#1a1f2e] hover:border-gray-600"
+                    }`}
+                  >
+                    <Image
+                      src={crypto.icon || "/placeholder.svg"}
+                      alt={crypto.name}
+                      width={32}
+                      height={32}
+                      className="rounded-full"
+                    />
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-white">{crypto.symbol}</div>
+                      {crypto.network && <div className="text-xs text-gray-400">{crypto.network}</div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <TabsContent value="deposit" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900">Deposit Bitcoin</CardTitle>
-                <CardDescription>Deposit via NOWPayments - Secure, instant BTC payments</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {!invoiceUrl ? (
-                  <div className="space-y-4">
-                    <Alert className="bg-blue-50 border-blue-200">
-                      <AlertCircle className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-gray-700">
-                        Minimum deposit: <strong>${minAmount}</strong>. Payments are processed instantly via
-                        NOWPayments.
-                      </AlertDescription>
-                    </Alert>
+            {/* Amount Input */}
+            <div>
+              <Label htmlFor="depositAmount" className="text-white">
+                Amount (USD)
+              </Label>
+              <Input
+                id="depositAmount"
+                type="number"
+                value={depositAmountUSD}
+                onChange={(e) => setDepositAmountUSD(e.target.value)}
+                placeholder={`Minimum $${minAmount}`}
+                className="mt-2 bg-[#1a1f2e] border-gray-700 text-white"
+                min={minAmount}
+                step="0.01"
+              />
+            </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="amount" className="text-gray-900">
-                        Amount to Deposit (USD)
-                      </Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        step="0.01"
-                        min={minAmount}
-                        value={depositAmountUSD}
-                        onChange={(e) => setDepositAmountUSD(e.target.value)}
-                        placeholder={`Enter amount (min $${minAmount})`}
-                        className="bg-gray-50"
-                      />
-                      {depositAmountUSD && Number.parseFloat(depositAmountUSD) >= minAmount && (
-                        <p className="text-xs text-gray-600">
-                          Approximately: {(Number.parseFloat(depositAmountUSD) / btcPrice).toFixed(8)} BTC
-                        </p>
+            <Button
+              onClick={handleCreateDeposit}
+              disabled={creating || !depositAmountUSD}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              {creating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Invoice...
+                </>
+              ) : (
+                <>
+                  <ArrowDownLeft className="mr-2 h-4 w-4" />
+                  Deposit with {selectedCrypto.symbol}
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Transactions */}
+        <Card className="bg-[#2a3142] border-orange-500/20">
+          <CardHeader>
+            <CardTitle className="text-white">Recent Transactions</CardTitle>
+            <CardDescription className="text-gray-400">Your wallet activity</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {transactions.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">No transactions yet</p>
+            ) : (
+              <div className="space-y-4">
+                {transactions.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between p-4 bg-[#1a1f2e] rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {tx.type === "deposit" ? (
+                        <ArrowDownLeft className="h-5 w-5 text-green-500" />
+                      ) : (
+                        <ArrowUpRight className="h-5 w-5 text-red-500" />
                       )}
+                      <div>
+                        <div className="text-white font-medium capitalize">{tx.type}</div>
+                        <div className="text-sm text-gray-400">{new Date(tx.created_at).toLocaleDateString()}</div>
+                      </div>
                     </div>
-                    <Button
-                      onClick={handleCreateDeposit}
-                      disabled={creating || !depositAmountUSD || Number.parseFloat(depositAmountUSD) < minAmount}
-                      className="w-full phoenix-gradient text-white font-semibold phoenix-glow"
+                    <div
+                      className={`text-lg font-semibold ${tx.type === "deposit" ? "text-green-500" : "text-red-500"}`}
                     >
-                      {creating ? "Creating Invoice..." : "Create Payment Invoice"}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <Alert className="bg-green-50 border-green-300">
-                      <Bitcoin className="h-5 w-5 text-green-600" />
-                      <AlertDescription className="text-gray-700">
-                        <strong>Payment invoice created!</strong> Click below to complete your payment via NOWPayments.
-                      </AlertDescription>
-                    </Alert>
-
-                    <div className="border-2 border-orange-300 rounded-lg p-6 space-y-4 bg-popover">
-                      <div>
-                        <Label className="text-gray-900 font-semibold">Amount:</Label>
-                        <p className="text-2xl font-bold text-gray-900">${invoiceData.amountUSD.toFixed(2)} USD</p>
-                      </div>
-
-                      <div>
-                        <Label className="text-gray-900 font-semibold">Payment Currency:</Label>
-                        <p className="text-lg text-gray-700 uppercase">{invoiceData.payCurrency}</p>
-                      </div>
-
-                      <Button
-                        onClick={handleOpenInvoice}
-                        className="w-full phoenix-gradient text-white font-semibold phoenix-glow"
-                        size="lg"
-                      >
-                        <ExternalLink className="mr-2 h-5 w-5" />
-                        Pay with NOWPayments
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setInvoiceUrl(null)
-                          setInvoiceData(null)
-                          setDepositAmountUSD("")
-                        }}
-                        className="w-full border-gray-300"
-                      >
-                        Create New Invoice
-                      </Button>
-                    </div>
-
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-sm text-gray-700">
-                        After completing payment, your wallet will be automatically credited. This usually takes a few
-                        minutes.
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                )}
-
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Bitcoin className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div className="space-y-2 text-sm">
-                      <p className="font-semibold text-gray-900">How NOWPayments deposits work:</p>
-                      <ol className="list-decimal list-inside space-y-1 text-gray-700">
-                        <li>Enter the USD amount you want to deposit</li>
-                        <li>Click "Create Payment Invoice" to generate a NOWPayments invoice</li>
-                        <li>Complete the payment on the NOWPayments secure page</li>
-                        <li>Your wallet is automatically credited after payment confirmation</li>
-                      </ol>
-                      <p className="text-xs text-gray-600 mt-2">
-                        NOWPayments is a trusted crypto payment processor with instant confirmations.
-                      </p>
+                      {tx.type === "deposit" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="history">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-gray-900">Transaction History</CardTitle>
-                <CardDescription>Your wallet activity</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {transactions.map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
-                      <div className="flex items-center gap-4">
-                        {getTransactionIcon(tx.type)}
-                        <div>
-                          <p className="font-medium capitalize text-gray-900">{tx.type}</p>
-                          <p className="text-sm text-gray-600">{new Date(tx.created_at).toLocaleDateString()}</p>
-                          {tx.description && <p className="text-xs text-gray-500">{tx.description}</p>}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-semibold ${getTransactionColor(tx.type)}`}>
-                          {tx.type === "deposit" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
-                        </p>
-                        <p className="text-xs text-gray-500">{(Math.abs(tx.amount) / btcPrice).toFixed(8)} BTC</p>
-                      </div>
-                    </div>
-                  ))}
-                  {transactions.length === 0 && <p className="text-center text-gray-500 py-12">No transactions yet</p>}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && invoiceUrl && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#2a3142] rounded-lg w-full max-w-4xl h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <div className="flex items-center gap-3">
+                <Image
+                  src={selectedCrypto.icon || "/placeholder.svg"}
+                  alt={selectedCrypto.name}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+                <h3 className="text-lg font-semibold text-white">
+                  Pay with {selectedCrypto.symbol}
+                  {selectedCrypto.network && (
+                    <span className="text-sm text-gray-400 ml-2">({selectedCrypto.network})</span>
+                  )}
+                </h3>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeInvoiceModal} className="text-white">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <iframe
+                src={invoiceUrl}
+                className="w-full h-full"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                title="Payment Invoice"
+              />
+            </div>
+            <div className="p-4 border-t border-gray-700 text-center text-sm text-gray-400">
+              Your wallet will be credited automatically after payment confirmation
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,8 +5,63 @@ const NOWPAYMENTS_API_KEY = process.env.NOWPAYMENTS_API_KEY
 const NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1"
 
 if (!NOWPAYMENTS_API_KEY) {
-  throw new Error("NOWPAYMENTS_API_KEY environment variable is not set")
+  console.warn("NOWPayments API key is not configured")
 }
+
+export interface CryptoInfo {
+  id: string
+  name: string
+  symbol: string
+  icon: string
+  network?: string
+}
+
+export const SUPPORTED_CRYPTOS: CryptoInfo[] = [
+  {
+    id: "btc",
+    name: "Bitcoin",
+    symbol: "BTC",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/bitcoin.png",
+  },
+  {
+    id: "usdterc20",
+    name: "Tether USD",
+    symbol: "USDT",
+    network: "ERC20",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/tether.png",
+  },
+  {
+    id: "usdttrc20",
+    name: "Tether USD",
+    symbol: "USDT",
+    network: "TRC20",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/tether.png",
+  },
+  {
+    id: "eth",
+    name: "Ethereum",
+    symbol: "ETH",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/ethereum.png",
+  },
+  {
+    id: "sol",
+    name: "Solana",
+    symbol: "SOL",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/solana.png",
+  },
+  {
+    id: "ltc",
+    name: "Litecoin",
+    symbol: "LTC",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/litecoin.png",
+  },
+  {
+    id: "trx",
+    name: "Tron",
+    symbol: "TRX",
+    icon: "https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/tron.png",
+  },
+]
 
 export interface NOWPaymentsInvoice {
   id: string
@@ -61,22 +116,27 @@ export async function getAvailableCurrencies(): Promise<string[]> {
 export async function createPaymentInvoice(
   userId: string,
   amountUSD: number,
+  payCurrency = "btc",
   orderId?: string,
 ): Promise<NOWPaymentsInvoice> {
+  if (!NOWPAYMENTS_API_KEY) {
+    throw new Error("NOWPayments API key is not configured")
+  }
+
   try {
     const invoiceOrderId = orderId || `deposit_${userId}_${Date.now()}`
 
     const requestBody = {
       price_amount: amountUSD,
       price_currency: "usd",
-      pay_currency: "btc", // Only accept Bitcoin
+      pay_currency: payCurrency.toLowerCase(),
       order_id: invoiceOrderId,
       order_description: `Wallet deposit for user ${userId}`,
       ipn_callback_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/api/wallet/ipn`,
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/wallet?status=success`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://phoenix-market.vercel.app"}/wallet?status=cancelled`,
       is_fixed_rate: true,
-      is_fee_paid_by_user: false, // Merchant pays the fees
+      is_fee_paid_by_user: false,
     }
 
     console.log("[v0] Creating NOWPayments invoice:", requestBody)

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Flame, ArrowLeft, Wallet, ShoppingCart } from "lucide-react"
+import { Wallet, ShoppingCart } from "lucide-react"
+import { PageHeader } from "@/components/layout/page-header"
 import type { CartItem } from "@/lib/marketplace"
 
 export default function CheckoutPage() {
@@ -59,7 +60,6 @@ export default function CheckoutPage() {
     setIsProcessing(true)
 
     try {
-      // Create orders for each item using the wallet-based order creation endpoint
       const orderPromises = cart.map(async (item) => {
         const response = await fetch("/api/orders/create", {
           method: "POST",
@@ -80,11 +80,10 @@ export default function CheckoutPage() {
 
       await Promise.all(orderPromises)
 
-      // Clear cart
       localStorage.removeItem("phoenix_cart")
 
-      alert("Orders placed successfully! Check your orders page for delivery.")
-      router.push("/market/orders")
+      alert("Orders placed successfully! Check your orders page.")
+      router.push("/orders")
     } catch (error: any) {
       console.error("[v0] Checkout error:", error)
       alert(error.message || "Failed to complete checkout. Please try again.")
@@ -95,27 +94,9 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b-2 border-border shadow-md bg-[#162330]">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="phoenix-gradient p-1.5 rounded-lg">
-              <Flame className="h-8 w-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-white">Phoenix Market</h1>
-          </div>
-        </div>
-      </header>
+      <PageHeader title="Checkout" subtitle="Complete your purchase" showBackButton={true} />
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Button
-          variant="ghost"
-          onClick={() => router.push("/market")}
-          className="mb-6 text-foreground hover:text-foreground/80"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Market
-        </Button>
-
         <div className="grid md:grid-cols-2 gap-6">
           <Card className="bg-[#162330] border-white/10">
             <CardHeader>
@@ -188,12 +169,12 @@ export default function CheckoutPage() {
               )}
 
               <div className="bg-[#0f1419] p-4 rounded-lg border border-white/10 space-y-2">
-                <p className="text-sm text-white font-medium">How it works:</p>
+                <p className="text-sm text-white font-medium">Escrow Protection:</p>
                 <ol className="text-sm text-white/80 space-y-1 list-decimal list-inside">
-                  <li>Payment is deducted from your wallet balance</li>
-                  <li>Funds are held in escrow for buyer protection</li>
-                  <li>Digital products are delivered instantly</li>
-                  <li>Confirm delivery or funds auto-release after period</li>
+                  <li>Payment held in secure escrow</li>
+                  <li>Digital products delivered instantly</li>
+                  <li>Release payment or auto-finalize in 24h</li>
+                  <li>Dispute option if issues arise</li>
                 </ol>
               </div>
 
@@ -209,7 +190,7 @@ export default function CheckoutPage() {
               <div className="bg-green-500/10 p-3 rounded-lg border border-green-500/20">
                 <p className="text-xs text-white">
                   <strong>Secure Payment:</strong> Your payment is protected by our escrow system. Funds are only
-                  released to the vendor after you confirm delivery.
+                  released to the vendor after you confirm delivery or auto-finalize period ends.
                 </p>
               </div>
             </CardContent>

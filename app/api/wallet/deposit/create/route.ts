@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
     }
 
-    const { amountUSD } = await request.json()
+    const { amountUSD, payCurrency } = await request.json()
 
     if (!amountUSD || amountUSD <= 0) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 })
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Minimum deposit amount is $${minAmount}` }, { status: 400 })
     }
 
-    const invoice = await createPaymentInvoice(userId, amountUSD)
+    const invoice = await createPaymentInvoice(userId, amountUSD, payCurrency || "btc")
 
     return NextResponse.json({
       success: true,

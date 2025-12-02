@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Flame, ArrowLeft, CheckCircle, Clock, Download, Copy, AlertTriangle, Timer } from "lucide-react"
+import { CheckCircle, Clock, Download, Copy, AlertTriangle, Timer } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { PageHeader } from "@/components/layout/page-header"
 
 interface Order {
   id: string
@@ -133,21 +134,15 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border/50 backdrop-blur-sm text-sidebar-primary bg-popover-foreground">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Flame className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold phoenix-gradient-text">Phoenix Market</h1>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title="Your Orders"
+        subtitle=""
+        showBackButton={true}
+        backButtonText="Back to Market"
+        backButtonHref="/market"
+      />
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Button variant="ghost" onClick={() => router.push("/market")} className="mb-6">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Market
-        </Button>
-
         <Card className="border-border/50">
           <CardHeader>
             <CardTitle className="text-foreground">Your Orders</CardTitle>
