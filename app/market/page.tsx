@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { ProductCard } from "@/components/marketplace/product-card"
 import { CartSidebar } from "@/components/marketplace/cart-sidebar"
 import { Button } from "@/components/ui/button"
-import { Flame, LogOut, User, Wallet } from 'lucide-react'
+import { Input } from "@/components/ui/input"
+import { Flame, LogOut, User, Wallet, Search, Shield, TrendingUp, Package, Grid, List } from "lucide-react"
 import type { Product, Category, CartItem } from "@/lib/marketplace"
 import Link from "next/link"
 
@@ -15,7 +16,9 @@ export default function MarketPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState("")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [sortBy, setSortBy] = useState<"newest" | "price-low" | "price-high" | "popular">("newest")
   const router = useRouter()
 
   useEffect(() => {
@@ -76,51 +79,73 @@ export default function MarketPage() {
     router.push("/profile")
   }
 
-  const filteredProducts = selectedCategory ? products.filter((p) => p.category_id === selectedCategory) : products
+  const filteredProducts = products
+    .filter((p) => !selectedCategory || p.category_id === selectedCategory)
+    .filter(
+      (p) =>
+        searchQuery === "" ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.vendor_name?.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .sort((a, b) => {
+      switch (sortBy) {
+        case "price-low":
+          return a.price - b.price
+        case "price-high":
+          return b.price - a.price
+        case "newest":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        default:
+          return 0
+      }
+    })
 
-  const topLevelCategories = categories.filter(c => !c.parent_category_id)
+  const topLevelCategories = categories.filter((c) => !c.parent_category_id)
   const getCategoryChildren = (parentId: string) => {
-    return categories.filter(c => c.parent_category_id === parentId)
+    return categories.filter((c) => c.parent_category_id === parentId)
   }
 
-  const toggleCategory = (categoryId: string) => {
-    const newExpanded = new Set(expandedCategories)
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId)
-    } else {
-      newExpanded.add(categoryId)
-    }
-    setExpandedCategories(newExpanded)
+  const stats = {
+    totalProducts: products.length,
+    activeVendors: [...new Set(products.map((p) => p.vendor_id))].length,
+    totalCategories: categories.length,
+    escrowProtected: products.length,
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
         <div className="text-center">
-          <Flame className="h-16 w-16 mx-auto text-primary animate-pulse mb-4" />
-          <p className="text-muted-foreground">Loading marketplace...</p>
+          <Flame className="h-16 w-16 mx-auto text-orange-500 animate-pulse mb-4" />
+          <p className="text-gray-400">Loading marketplace...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b-2 border-border shadow-md sticky top-0 z-50 bg-[#162330]/95 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-3.5">
+    <div className="min-h-screen bg-[#0d1117] flex flex-col">
+      <header className="border-b border-gray-800 sticky top-0 z-50 bg-[#161b22]/95 backdrop-blur-sm shadow-xl">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="phoenix-gradient p-1.5 rounded-lg">
-                <Flame className="h-7 w-7 text-white" />
+            <Link href="/market" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+              <div className="bg-gradient-to-br from-orange-500 via-red-500 to-yellow-600 p-2 rounded-lg shadow-lg">
+                <Flame className="h-6 w-6 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-white">Phoenix Market</h1>
-            </div>
-            <div className="flex items-center gap-2.5">
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-orange-400 via-red-400 to-yellow-400 bg-clip-text text-transparent">
+                  Phoenix Market
+                </h1>
+                <p className="text-[10px] text-gray-500">Secure • Anonymous • Trusted</p>
+              </div>
+            </Link>
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => router.push("/wallet")}
-                className="border-white/30 text-white hover:bg-white/10 bg-transparent"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
               >
                 <Wallet className="h-4 w-4 mr-2" />
                 Wallet
@@ -130,70 +155,104 @@ export default function MarketPage() {
                 variant="outline"
                 size="icon"
                 onClick={handleProfile}
-                className="border-white/30 text-white hover:bg-white/10 bg-transparent h-9 w-9"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent h-9 w-9"
               >
-                <User className="h-4.5 w-4.5" />
+                <User className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
                 onClick={handleLogout}
-                className="border-white/30 text-white hover:bg-white/10 bg-transparent h-9 w-9"
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent h-9 w-9"
               >
-                <LogOut className="h-4.5 w-4.5" />
+                <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </div>
+      </header>
 
-        <div className="border-t border-white/10 bg-[#162330]">
-          <div className="container mx-auto px-4 py-2.5">
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+      <div className="container mx-auto px-4 py-4 flex gap-6">
+        <aside className="w-64 flex-shrink-0 sticky top-20 h-fit space-y-4">
+          {/* Market Stats */}
+          <div className="bg-[#161b22] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-orange-500" />
+              Market Stats
+            </h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Products</span>
+                <span className="text-white font-semibold">{stats.totalProducts}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Vendors</span>
+                <span className="text-white font-semibold">{stats.activeVendors}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Categories</span>
+                <span className="text-white font-semibold">{stats.totalCategories}</span>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-800">
+                <Shield className="h-3 w-3 text-green-500" />
+                <span className="text-green-400 text-xs">100% Escrow Protected</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Categories */}
+          <div className="bg-[#161b22] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <Package className="h-4 w-4 text-orange-500" />
+              Categories
+            </h3>
+            <div className="space-y-1">
               <button
                 onClick={() => setSelectedCategory(null)}
-                className={`px-3.5 py-1 rounded-full whitespace-nowrap text-xs font-medium transition-all border-r border-white/10 last:border-r-0 ${
+                className={`w-full text-left px-3 py-2 rounded text-sm transition-all ${
                   selectedCategory === null
-                    ? "bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 text-white shadow-lg"
-                    : "text-white/70 hover:text-white hover:bg-white/5"
+                    ? "bg-gradient-to-r from-orange-500/20 to-red-500/20 text-orange-400 font-medium"
+                    : "text-gray-400 hover:text-gray-300 hover:bg-gray-800/50"
                 }`}
               >
-                All Products
+                All Products ({products.length})
               </button>
               {topLevelCategories.map((category) => {
                 const children = getCategoryChildren(category.id)
-                const isExpanded = expandedCategories.has(category.id)
-                const hasChildren = children.length > 0
+                const categoryCount = products.filter(
+                  (p) => p.category_id === category.id || children.some((c) => c.id === p.category_id),
+                ).length
 
                 return (
-                  <div key={category.id} className="relative group">
+                  <div key={category.id}>
                     <button
-                      onClick={() => {
-                        setSelectedCategory(category.id)
-                        if (hasChildren) toggleCategory(category.id)
-                      }}
-                      className={`px-3.5 py-1 rounded-full whitespace-nowrap text-xs font-medium transition-all border-r border-white/10 ${
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`w-full text-left px-3 py-2 rounded text-sm transition-all ${
                         selectedCategory === category.id
-                          ? "bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 text-white shadow-lg"
-                          : "text-white/70 hover:text-white hover:bg-white/5"
+                          ? "bg-gradient-to-r from-orange-500/20 to-red-500/20 text-orange-400 font-medium"
+                          : "text-gray-400 hover:text-gray-300 hover:bg-gray-800/50"
                       }`}
                     >
-                      {category.name} {hasChildren && (isExpanded ? '▼' : '▶')}
+                      {category.name} ({categoryCount})
                     </button>
-                    {hasChildren && isExpanded && (
-                      <div className="absolute top-full left-0 mt-1 bg-[#162330] border border-white/20 rounded-lg shadow-lg py-1 min-w-[150px] z-10">
-                        {children.map((child) => (
-                          <button
-                            key={child.id}
-                            onClick={() => setSelectedCategory(child.id)}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors ${
-                              selectedCategory === child.id
-                                ? "bg-gradient-to-r from-red-500/20 via-orange-500/20 to-yellow-500/20 text-white"
-                                : "text-white/70 hover:text-white"
-                            }`}
-                          >
-                            {child.name}
-                          </button>
-                        ))}
+                    {children.length > 0 && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {children.map((child) => {
+                          const childCount = products.filter((p) => p.category_id === child.id).length
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => setSelectedCategory(child.id)}
+                              className={`w-full text-left px-3 py-1.5 rounded text-xs transition-all ${
+                                selectedCategory === child.id
+                                  ? "bg-gradient-to-r from-orange-500/10 to-red-500/10 text-orange-400"
+                                  : "text-gray-500 hover:text-gray-400 hover:bg-gray-800/30"
+                              }`}
+                            >
+                              └ {child.name} ({childCount})
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -201,41 +260,107 @@ export default function MarketPage() {
               })}
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-7 flex-grow">
-        <div>
-          <div className="flex items-center justify-between mb-5 pb-2.5 border-b-2 border-gradient-to-r from-destructive/30 via-accent/30 to-destructive/30">
-            <h2 className="text-lg font-semibold text-secondary">
-              {selectedCategory ? categories.find((c) => c.id === selectedCategory)?.name : "All Products"}
-            </h2>
-            <p className="text-xs font-medium px-2.5 py-0.5 rounded-full phoenix-gradient text-white shadow-md">
-              {filteredProducts.length} {filteredProducts.length === 1 ? "product" : "products"}
-            </p>
+          {/* Trust & Safety */}
+          <div className="bg-[#161b22] border border-gray-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <Shield className="h-4 w-4 text-green-500" />
+              Trust & Safety
+            </h3>
+            <div className="space-y-2 text-xs text-gray-400">
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5" />
+                <span>24-hour escrow protection</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5" />
+                <span>Verified vendor system</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5" />
+                <span>Dispute resolution</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="w-1 h-1 rounded-full bg-green-500 mt-1.5" />
+                <span>PGP encrypted delivery</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="flex-grow">
+          <div className="bg-[#161b22] border border-gray-800 rounded-lg p-4 mb-4">
+            <div className="flex gap-3 items-center">
+              <div className="flex-grow relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <Input
+                  type="text"
+                  placeholder="Search products, vendors..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 bg-[#0d1117] border-gray-700 text-gray-300 placeholder:text-gray-600"
+                />
+              </div>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-3 py-2 bg-[#0d1117] border border-gray-700 rounded-md text-sm text-gray-300"
+              >
+                <option value="newest">Newest First</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+              <div className="flex gap-1 border border-gray-700 rounded-md">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-2 ${viewMode === "grid" ? "bg-gray-700 text-orange-400" : "text-gray-500"}`}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`p-2 ${viewMode === "list" ? "bg-gray-700 text-orange-400" : "text-gray-500"}`}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                {selectedCategory ? categories.find((c) => c.id === selectedCategory)?.name : "All Products"}
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {filteredProducts.length} {filteredProducts.length === 1 ? "result" : "results"}
+                {searchQuery && ` for "${searchQuery}"`}
+              </p>
+            </div>
           </div>
 
           {filteredProducts.length === 0 ? (
-            <div className="text-center py-14">
-              <p className="text-muted-foreground text-base">No products available</p>
-              <p className="text-xs text-muted-foreground mt-1.5">Check back later for new items</p>
+            <div className="text-center py-20 bg-[#161b22] border border-gray-800 rounded-lg">
+              <Package className="h-12 w-12 mx-auto text-gray-700 mb-3" />
+              <p className="text-gray-400 text-base">No products found</p>
+              <p className="text-xs text-gray-600 mt-1">Try adjusting your search or filters</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className={viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} onAddToCart={handleAddToCart} />
+                <ProductCard key={product.id} product={product} onAddToCart={handleAddToCart} viewMode={viewMode} />
               ))}
             </div>
           )}
-        </div>
-      </main>
+        </main>
+      </div>
 
-      <footer className="bg-[#162330] border-t border-white/10 mt-auto">
+      <footer className="bg-[#161b22] border-t border-gray-800 mt-auto">
         <div className="container mx-auto px-4 py-7">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-7">
             <div>
               <div className="flex items-center gap-1.5 mb-3.5">
-                <div className="phoenix-gradient p-1.5 rounded-lg">
+                <div className="bg-gradient-to-br from-orange-500 via-red-500 to-yellow-600 p-1.5 rounded-lg shadow-lg">
                   <Flame className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-base font-bold text-white">Phoenix Market</span>
@@ -307,7 +432,7 @@ export default function MarketPage() {
             </div>
           </div>
 
-          <div className="mt-7 pt-5 border-t border-white/10 text-center">
+          <div className="mt-7 pt-5 border-t border-gray-800 text-center">
             <p className="text-white/50 text-xs">© 2025 Phoenix Market. All rights reserved.</p>
           </div>
         </div>
