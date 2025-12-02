@@ -15,16 +15,25 @@ export async function POST(request: NextRequest) {
 
     const { productId } = await request.json()
 
-    // Get product details
+    console.log("[v0] Creating order for product:", productId)
+
     const { data: product, error: productError } = await supabase
       .from("products")
-      .select("*, vendors!inner(id, user_id)")
+      .select("*")
       .eq("id", productId)
-      .single()
+      .maybeSingle()
 
-    if (productError || !product) {
+    if (productError) {
+      console.error("[v0] Product fetch error:", productError)
+      return NextResponse.json({ error: "Failed to fetch product" }, { status: 500 })
+    }
+
+    if (!product) {
+      console.error("[v0] Product not found:", productId)
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
+
+    console.log("[v0] Product found:", product.name)
 
     let { data: wallet, error: walletError } = await supabase.from("wallets").select("*").eq("user_id", userId).single()
 
@@ -95,8 +104,10 @@ export async function POST(request: NextRequest) {
 
     if (orderError) throw orderError
 
+    console.log("[v0] Order created:", order.id)
+
     // Calculate auto-finalize time
-    const autoFinalizeHours = product.product_type === "digital" ? 24 : 120 // 24 hours or 5 days
+    const autoFinalizeHours = product.product_type === "digital" ? 24 : 120
     const autoFinalizeAt = new Date(Date.now() + autoFinalizeHours * 60 * 60 * 1000)
 
     // Create escrow
@@ -112,9 +123,11 @@ export async function POST(request: NextRequest) {
       auto_finalize_at: autoFinalizeAt.toISOString(),
     })
 
+    console.log("[v0] Escrow created for order:", order.id)
+
     return NextResponse.json({ success: true, orderId: order.id })
   } catch (error: any) {
-    console.error("Failed to create order:", error)
+    console.error("[v0] Failed to create order:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

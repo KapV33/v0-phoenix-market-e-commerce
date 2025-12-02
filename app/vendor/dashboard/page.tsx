@@ -12,6 +12,7 @@ import { ProductExportButton } from "@/components/vendor/product-export-button"
 import { ExcelUpload } from "@/components/vendor/excel-upload"
 import { VendorSettings } from "@/components/vendor/vendor-settings"
 import { WithdrawalDialog } from "@/components/vendor/withdrawal-dialog"
+import { PageHeader } from "@/components/layout/page-header"
 
 interface VendorProfile {
   id: string
@@ -111,6 +112,8 @@ export default function VendorDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageHeader title="Vendor Dashboard" />
+
       <div className="border-b border-border bg-secondary">
         <div className="max-w-7xl mx-auto p-6">
           <div className="flex items-center justify-between">

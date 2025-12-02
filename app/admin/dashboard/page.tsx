@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Link } from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -190,7 +191,7 @@ export default function AdminDashboardPage() {
       <header className="border-b border-border/50 bg-secondary backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <Link href="/market" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <div className="relative">
                 <Flame className="h-8 w-8 text-white phoenix-gradient p-1.5 rounded-lg" />
                 <Shield className="h-4 w-4 text-white absolute -bottom-1 -right-1" />
@@ -199,7 +200,7 @@ export default function AdminDashboardPage() {
                 <h1 className="text-2xl font-bold text-white">Phoenix Market</h1>
                 <p className="text-xs text-white/70">Admin Dashboard</p>
               </div>
-            </div>
+            </Link>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
