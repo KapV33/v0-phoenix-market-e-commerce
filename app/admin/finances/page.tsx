@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DollarSign, TrendingUp, Wallet, Save } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function AdminFinancesPage() {
   const [commissionRate, setCommissionRate] = useState<number>(10)
@@ -16,6 +25,17 @@ export default function AdminFinancesPage() {
     totalRevenue: 0,
     totalCommissions: 0,
     totalEscrow: 0,
+  })
+  const [alertDialog, setAlertDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    variant: "success" | "error"
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "success",
   })
   const router = useRouter()
 
@@ -50,9 +70,19 @@ export default function AdminFinancesPage() {
 
       if (!response.ok) throw new Error("Failed to save commission rate")
 
-      alert("Commission rate updated successfully!")
+      setAlertDialog({
+        open: true,
+        title: "Success",
+        message: "Commission rate updated successfully!",
+        variant: "success",
+      })
     } catch (error) {
-      alert("Failed to update commission rate")
+      setAlertDialog({
+        open: true,
+        title: "Error",
+        message: "Failed to update commission rate",
+        variant: "error",
+      })
     } finally {
       setIsSaving(false)
     }
@@ -145,6 +175,23 @@ export default function AdminFinancesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <AlertDialogContent className="bg-[#1a1f2e] border-orange-500/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle
+              className={`flex items-center gap-2 ${alertDialog.variant === "success" ? "text-green-500" : "text-red-500"}`}
+            >
+              {alertDialog.variant === "success" ? <Save className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+              {alertDialog.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">{alertDialog.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction className="bg-orange-600 text-white hover:bg-orange-700">OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

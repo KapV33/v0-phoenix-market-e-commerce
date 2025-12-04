@@ -6,8 +6,18 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Package, Clock, Copy, Check, Eye, EyeOff } from "lucide-react"
+import { Package, Clock, Copy, Check, Eye, EyeOff, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { PageHeader } from "@/components/layout/page-header"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Order {
   id: string
@@ -64,6 +74,28 @@ export default function OrdersPage() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null)
   const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null)
   const [revealedOrders, setRevealedOrders] = useState<Set<string>>(new Set())
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    title: string
+    description: string
+    onConfirm: () => void
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {},
+  })
+  const [alertDialog, setAlertDialog] = useState<{
+    open: boolean
+    title: string
+    description: string
+    variant: "success" | "error"
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    variant: "success",
+  })
   const router = useRouter()
 
   useEffect(() => {
@@ -88,26 +120,46 @@ export default function OrdersPage() {
   }, [router])
 
   const handleFinalize = async (escrowId: string) => {
-    if (!confirm("Release payment to vendor? This action cannot be undone.")) return
+    setConfirmDialog({
+      open: true,
+      title: "Release Payment to Vendor?",
+      description: "This will release the escrowed funds to the vendor. This action cannot be undone.",
+      onConfirm: async () => {
+        try {
+          const res = await fetch("/api/orders/release", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ escrowId }),
+          })
 
-    try {
-      const res = await fetch("/api/orders/release", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ escrowId }),
-      })
-
-      const data = await res.json()
-      if (data.success) {
-        alert("Payment released successfully!")
-        window.location.reload()
-      } else {
-        alert(data.error || "Failed to release payment")
-      }
-    } catch (error) {
-      alert("Failed to release payment")
-    }
+          const data = await res.json()
+          if (data.success) {
+            setAlertDialog({
+              open: true,
+              title: "Payment Released Successfully",
+              description: "The funds have been released to the vendor. The order is now complete.",
+              variant: "success",
+            })
+            setTimeout(() => window.location.reload(), 2000)
+          } else {
+            setAlertDialog({
+              open: true,
+              title: "Failed to Release Payment",
+              description: data.error || "An error occurred while releasing the payment. Please try again.",
+              variant: "error",
+            })
+          }
+        } catch (error) {
+          setAlertDialog({
+            open: true,
+            title: "Failed to Release Payment",
+            description: "An error occurred while releasing the payment. Please try again.",
+            variant: "error",
+          })
+        }
+      },
+    })
   }
 
   const handleDispute = async (escrowId: string, orderId: string) => {
@@ -318,6 +370,62 @@ export default function OrdersPage() {
           </div>
         )}
       </main>
+
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <AlertDialogContent className="bg-white dark:bg-gray-900">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              {confirmDialog.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-600 dark:text-gray-400">
+              {confirmDialog.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                confirmDialog.onConfirm()
+                setConfirmDialog({ ...confirmDialog, open: false })
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <AlertDialogContent className="bg-white dark:bg-gray-900">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              {alertDialog.variant === "success" ? (
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+              )}
+              {alertDialog.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-600 dark:text-gray-400">
+              {alertDialog.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => setAlertDialog({ ...alertDialog, open: false })}
+              className={
+                alertDialog.variant === "success" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

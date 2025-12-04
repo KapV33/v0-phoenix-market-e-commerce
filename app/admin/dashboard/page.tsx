@@ -30,6 +30,17 @@ import {
 } from "lucide-react"
 import type { Product, Category } from "@/lib/marketplace"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
 interface WalletData {
   id: string
   user_id: string
@@ -44,6 +55,27 @@ export default function AdminDashboardPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean
+    type: "product" | "category" | null
+    id: string | null
+  }>({
+    open: false,
+    type: null,
+    id: null,
+  })
+  const [alertDialog, setAlertDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    variant: "success" | "error"
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    variant: "success",
+  })
 
   const [commissionRate, setCommissionRate] = useState<number>(10)
   const [isSaving, setIsSaving] = useState(false)
@@ -111,9 +143,19 @@ export default function AdminDashboardPage() {
 
       if (!response.ok) throw new Error("Failed to save commission rate")
 
-      alert("Commission rate updated successfully!")
+      setAlertDialog({
+        open: true,
+        title: "Success",
+        message: "Commission rate updated successfully!",
+        variant: "success",
+      })
     } catch (error) {
-      alert("Failed to update commission rate")
+      setAlertDialog({
+        open: true,
+        title: "Error",
+        message: "Failed to update commission rate",
+        variant: "error",
+      })
     } finally {
       setIsSaving(false)
     }
@@ -129,34 +171,44 @@ export default function AdminDashboardPage() {
   }
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this product?")) return
-
-    try {
-      const response = await fetch(`/api/admin/products/${id}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) throw new Error("Failed to delete")
-
-      loadData()
-    } catch (error) {
-      alert("Failed to delete product")
-    }
+    setDeleteDialog({ open: true, type: "product", id })
   }
 
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this category?")) return
+    setDeleteDialog({ open: true, type: "category", id })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id || !deleteDialog.type) return
 
     try {
-      const response = await fetch(`/api/admin/categories/${id}`, {
+      const endpoint =
+        deleteDialog.type === "product"
+          ? `/api/admin/products/${deleteDialog.id}`
+          : `/api/admin/categories/${deleteDialog.id}`
+
+      const response = await fetch(endpoint, {
         method: "DELETE",
       })
 
       if (!response.ok) throw new Error("Failed to delete")
 
       loadData()
+      setDeleteDialog({ open: false, type: null, id: null })
+      setAlertDialog({
+        open: true,
+        title: "Success",
+        message: `${deleteDialog.type === "product" ? "Product" : "Category"} deleted successfully!`,
+        variant: "success",
+      })
     } catch (error) {
-      alert("Failed to delete category")
+      setAlertDialog({
+        open: true,
+        title: "Error",
+        message: `Failed to delete ${deleteDialog.type}`,
+        variant: "error",
+      })
+      setDeleteDialog({ open: false, type: null, id: null })
     }
   }
 
@@ -564,6 +616,45 @@ export default function AdminDashboardPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
+        <AlertDialogContent className="bg-[#1a1f2e] border-orange-500/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Confirm Deletion
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">
+              Are you sure you want to delete this {deleteDialog.type}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-700 text-white hover:bg-gray-600 border-gray-600">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 text-white hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <AlertDialogContent className="bg-[#1a1f2e] border-orange-500/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle
+              className={`flex items-center gap-2 ${alertDialog.variant === "success" ? "text-green-500" : "text-red-500"}`}
+            >
+              {alertDialog.variant === "success" ? <Save className="h-5 w-5" /> : <Trash2 className="h-5 w-5" />}
+              {alertDialog.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300">{alertDialog.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction className="bg-orange-600 text-white hover:bg-orange-700">OK</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
