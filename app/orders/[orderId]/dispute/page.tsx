@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Loader2, Send, AlertTriangle } from "lucide-react"
+import { Loader2, Send, AlertTriangle, CheckCircle2, DollarSign } from "lucide-react"
+import { Slider } from "@/components/ui/slider"
 
 interface Message {
   id: string
@@ -27,9 +28,16 @@ interface Dispute {
   status: string
   created_at: string
   order_id: string
+  resolution_notes?: string
   orders: {
     product_name: string
     product_price: number
+    user_id: string
+  }
+  escrows: {
+    amount: string
+    vendor_id: string
+    buyer_id: string
   }
 }
 
@@ -42,10 +50,16 @@ export default function DisputePage({ params }: { params: { orderId: string } })
   const [sending, setSending] = useState(false)
   const [disputeReason, setDisputeReason] = useState("")
   const [creatingDispute, setCreatingDispute] = useState(false)
+  const [userRole, setUserRole] = useState<"buyer" | "vendor" | "admin" | null>(null)
+  const [buyerPercentage, setBuyerPercentage] = useState(50)
+  const [resolutionNotes, setResolutionNotes] = useState("")
+  const [resolving, setResolving] = useState(false)
+  const [releasing, setReleasing] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchDispute()
+    checkUserRole()
   }, [])
 
   useEffect(() => {
@@ -135,6 +149,84 @@ export default function DisputePage({ params }: { params: { orderId: string } })
     }
   }
 
+  const checkUserRole = async () => {
+    try {
+      const response = await fetch("/api/auth/me")
+      const data = await response.json()
+      if (data.isAdmin) {
+        setUserRole("admin")
+      } else if (data.isVendor) {
+        setUserRole("vendor")
+      } else {
+        setUserRole("buyer")
+      }
+    } catch (error) {
+      console.error("Failed to check user role:", error)
+    }
+  }
+
+  const handleResolveDispute = async () => {
+    if (!dispute) return
+
+    const vendorPercentage = 100 - buyerPercentage
+
+    if (!confirm(`Split funds: ${buyerPercentage}% to buyer, ${vendorPercentage}% to vendor. Continue?`)) {
+      return
+    }
+
+    setResolving(true)
+    try {
+      const response = await fetch(`/api/disputes/${dispute.id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyerPercentage,
+          vendorPercentage,
+          resolutionNotes,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to resolve dispute")
+
+      alert("Dispute resolved successfully!")
+      fetchDispute()
+    } catch (error) {
+      alert("Failed to resolve dispute")
+    } finally {
+      setResolving(false)
+    }
+  }
+
+  const handleBuyerRelease = async () => {
+    if (!dispute) return
+
+    if (!confirm("Release 100% of funds to vendor? This action cannot be undone.")) {
+      return
+    }
+
+    setReleasing(true)
+    try {
+      const response = await fetch(`/api/disputes/${dispute.id}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyerPercentage: 0,
+          vendorPercentage: 100,
+          resolutionNotes: "Buyer released funds",
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to release funds")
+
+      alert("Funds released to vendor successfully!")
+      fetchDispute()
+    } catch (error) {
+      alert("Failed to release funds")
+    } finally {
+      setReleasing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -172,8 +264,8 @@ export default function DisputePage({ params }: { params: { orderId: string } })
                 />
               </div>
 
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground space-y-1">
+              <div className="p-4 rounded-lg bg-slate-950 text-card-foreground">
+                <p className="text-sm space-y-1 text-ring">
                   <strong>What happens next:</strong>
                   <br />• The vendor and admin will be notified
                   <br />• You can communicate with all parties in the dispute chat
@@ -224,12 +316,18 @@ export default function DisputePage({ params }: { params: { orderId: string } })
     return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
+  const vendorPercentage = 100 - buyerPercentage
+  const totalAmount = Number.parseFloat(dispute.escrows?.amount || "0")
+  const buyerAmount = (totalAmount * buyerPercentage) / 100
+  const vendorAmount = (totalAmount * vendorPercentage) / 100
+  const isResolved = dispute.status.startsWith("resolved")
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold">Dispute Chat</h1>
+            <h1 className="text-4xl font-bold">Dispute Resolution</h1>
             <p className="text-muted-foreground">Order: {dispute.orders.product_name}</p>
           </div>
           {getStatusBadge(dispute.status)}
@@ -245,7 +343,7 @@ export default function DisputePage({ params }: { params: { orderId: string } })
               <ScrollArea ref={scrollRef} className="h-[500px] pr-4">
                 <div className="space-y-4">
                   {messages.map((msg) => {
-                    const isCurrentUser = msg.sender_type === "user"
+                    const isCurrentUser = msg.sender_type === userRole
                     const senderName =
                       msg.sender_type === "admin"
                         ? "Admin"
@@ -284,45 +382,171 @@ export default function DisputePage({ params }: { params: { orderId: string } })
                 </div>
               </ScrollArea>
 
-              <div className="flex gap-2">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type your message..."
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                />
-                <Button onClick={handleSendMessage} disabled={sending || !newMessage.trim()} size="icon">
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
+              {!isResolved && (
+                <div className="flex gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
+                    }}
+                  />
+                  <Button onClick={handleSendMessage} disabled={sending || !newMessage.trim()} size="icon">
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {isResolved && (
+                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
+                  <CheckCircle2 className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-500">Dispute Resolved</p>
+                  {dispute.resolution_notes && (
+                    <p className="text-xs text-muted-foreground mt-1">{dispute.resolution_notes}</p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Dispute Details</CardTitle>
+                <CardTitle>Sale Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Product:</p>
+                  <p className="text-sm font-medium">{dispute.orders.product_name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Escrow Amount:</p>
+                  <p className="text-2xl font-bold text-primary">${totalAmount.toFixed(2)}</p>
+                </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Opened:</p>
                   <p className="text-sm">{new Date(dispute.created_at).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Amount:</p>
-                  <p className="text-lg font-semibold">${dispute.orders.product_price.toFixed(2)}</p>
-                </div>
-                <div>
                   <p className="text-sm text-muted-foreground mb-1">Reason:</p>
-                  <p className="text-sm">{dispute.reason}</p>
+                  <p className="text-sm bg-muted p-3 rounded">{dispute.reason}</p>
                 </div>
               </CardContent>
             </Card>
+
+            {!isResolved && (userRole === "vendor" || userRole === "admin") && (
+              <Card className="border-orange-500/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-orange-500" />
+                    Resolve Dispute
+                  </CardTitle>
+                  <CardDescription>Split funds between buyer and vendor</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block">Fund Distribution</Label>
+                      <div className="bg-muted p-4 rounded-lg space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Buyer Refund</span>
+                          <span className="text-lg font-bold text-blue-500">{buyerPercentage}%</span>
+                        </div>
+                        <Slider
+                          value={[buyerPercentage]}
+                          onValueChange={(value) => setBuyerPercentage(value[0])}
+                          max={100}
+                          step={5}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Vendor Payout</span>
+                          <span className="text-lg font-bold text-green-500">{vendorPercentage}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/50 p-3 rounded space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Buyer receives:</span>
+                        <span className="font-semibold text-blue-500">${buyerAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Vendor receives:</span>
+                        <span className="font-semibold text-green-500">${vendorAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Resolution Notes (Optional)</Label>
+                      <Textarea
+                        id="notes"
+                        value={resolutionNotes}
+                        onChange={(e) => setResolutionNotes(e.target.value)}
+                        placeholder="Add notes about the resolution..."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleResolveDispute} disabled={resolving} className="w-full" size="lg">
+                    {resolving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Resolving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Confirm Resolution
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {!isResolved && userRole === "buyer" && (
+              <Card className="border-green-500/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    Release Funds
+                  </CardTitle>
+                  <CardDescription>Close dispute and release payment to vendor</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-green-500/10 p-4 rounded-lg">
+                    <p className="text-sm text-muted-foreground">
+                      If you're satisfied with the resolution, you can release the full escrow amount to the vendor.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleBuyerRelease}
+                    disabled={releasing}
+                    variant="default"
+                    className="w-full"
+                    size="lg"
+                  >
+                    {releasing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Releasing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Release All Funds to Vendor
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
@@ -331,30 +555,37 @@ export default function DisputePage({ params }: { params: { orderId: string } })
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3">
                   <Avatar>
-                    <AvatarFallback>B</AvatarFallback>
+                    <AvatarFallback className={userRole === "buyer" ? "bg-primary" : ""}>B</AvatarFallback>
                   </Avatar>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">Buyer</p>
-                    <p className="text-xs text-muted-foreground">You</p>
+                    <p className="text-xs text-muted-foreground">{userRole === "buyer" ? "You" : "Customer"}</p>
                   </div>
+                  {userRole === "buyer" && <Badge variant="outline">You</Badge>}
                 </div>
                 <div className="flex items-center gap-3">
                   <Avatar>
-                    <AvatarFallback>V</AvatarFallback>
+                    <AvatarFallback className={userRole === "vendor" ? "bg-primary" : ""}>V</AvatarFallback>
                   </Avatar>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">Vendor</p>
-                    <p className="text-xs text-muted-foreground">Seller</p>
+                    <p className="text-xs text-muted-foreground">{userRole === "vendor" ? "You" : "Seller"}</p>
                   </div>
+                  {userRole === "vendor" && <Badge variant="outline">You</Badge>}
                 </div>
                 <div className="flex items-center gap-3">
                   <Avatar>
-                    <AvatarFallback className="bg-primary">A</AvatarFallback>
+                    <AvatarFallback
+                      className={userRole === "admin" ? "bg-primary text-primary-foreground" : "bg-primary"}
+                    >
+                      A
+                    </AvatarFallback>
                   </Avatar>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">Admin</p>
-                    <p className="text-xs text-muted-foreground">Mediator</p>
+                    <p className="text-xs text-muted-foreground">{userRole === "admin" ? "You" : "Mediator"}</p>
                   </div>
+                  {userRole === "admin" && <Badge variant="outline">You</Badge>}
                 </div>
               </CardContent>
             </Card>

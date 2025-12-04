@@ -110,28 +110,8 @@ export default function OrdersPage() {
     }
   }
 
-  const handleDispute = async (escrowId: string) => {
-    const reason = prompt("Please explain the issue:")
-    if (!reason) return
-
-    try {
-      const res = await fetch("/api/orders/dispute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ escrowId, reason }),
-      })
-
-      const data = await res.json()
-      if (data.success) {
-        alert("Dispute opened. An admin will review your case.")
-        window.location.reload()
-      } else {
-        alert(data.error || "Failed to open dispute")
-      }
-    } catch (error) {
-      alert("Failed to open dispute")
-    }
+  const handleDispute = async (escrowId: string, orderId: string) => {
+    router.push(`/orders/${orderId}/dispute`)
   }
 
   const handleCopyContent = (orderId: string, content: string) => {
@@ -300,7 +280,11 @@ export default function OrdersPage() {
                       >
                         Release Payment
                       </Button>
-                      <Button onClick={() => handleDispute(order.id)} variant="destructive" className="flex-1">
+                      <Button
+                        onClick={() => handleDispute(order.id, order.order_id)}
+                        variant="destructive"
+                        className="flex-1"
+                      >
                         Open Dispute
                       </Button>
                     </div>
@@ -313,8 +297,19 @@ export default function OrdersPage() {
                   )}
 
                   {order.status === "disputed" && (
-                    <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg">
-                      <p className="text-sm text-red-700 dark:text-red-400">⚠ Dispute in progress - Admin reviewing</p>
+                    <div className="space-y-3">
+                      <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg">
+                        <p className="text-sm text-red-700 dark:text-red-400">
+                          ⚠ Dispute in progress - Admin reviewing
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => router.push(`/orders/${order.order_id}/dispute`)}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        View Dispute Chat
+                      </Button>
                     </div>
                   )}
                 </CardContent>

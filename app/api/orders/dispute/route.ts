@@ -12,30 +12,32 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const { orderId, reason } = await request.json()
+    const { escrowId, reason } = await request.json()
 
-    // Get the escrow
+    console.log("[v0] Opening dispute for escrow:", escrowId)
+
     const { data: escrow, error: escrowError } = await supabase
       .from("escrows")
       .select("*, orders!inner(user_id)")
-      .eq("order_id", orderId)
+      .eq("id", escrowId)
       .eq("status", "active")
       .single()
 
     if (escrowError || !escrow) {
+      console.error("[v0] Escrow lookup error:", escrowError)
       return NextResponse.json({ error: "Escrow not found or already finalized" }, { status: 404 })
     }
 
-    // Verify the user is the buyer
+    console.log("[v0] Escrow found:", escrow.id, "Order:", escrow.order_id)
+
     if (escrow.orders.user_id !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    // Create dispute
     const { data: dispute, error: disputeError } = await supabase
       .from("disputes")
       .insert({
-        order_id: orderId,
+        order_id: escrow.order_id,
         escrow_id: escrow.id,
         opened_by: userId,
         reason,
@@ -44,13 +46,18 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (disputeError) throw disputeError
+    if (disputeError) {
+      console.error("[v0] Dispute creation error:", disputeError)
+      throw disputeError
+    }
 
-    // Update escrow status
+    console.log("[v0] Dispute created:", dispute.id)
+
     await supabase.from("escrows").update({ status: "disputed" }).eq("id", escrow.id)
 
-    // Update order
-    await supabase.from("orders").update({ escrow_status: "disputed" }).eq("id", orderId)
+    await supabase.from("orders").update({ escrow_status: "disputed" }).eq("id", escrow.order_id)
+
+    console.log("[v0] Dispute opened successfully")
 
     return NextResponse.json({ success: true, disputeId: dispute.id })
   } catch (error: any) {
