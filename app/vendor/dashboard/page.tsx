@@ -6,13 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Package, DollarSign, MessageSquare, Loader2 } from "lucide-react"
+import { Package, DollarSign, MessageSquare, Loader2, CreditCard } from "lucide-react"
 import { ProductFormDialog } from "@/components/vendor/product-form-dialog"
 import { ProductExportButton } from "@/components/vendor/product-export-button"
 import { ExcelUpload } from "@/components/vendor/excel-upload"
 import { VendorSettings } from "@/components/vendor/vendor-settings"
 import { WithdrawalDialog } from "@/components/vendor/withdrawal-dialog"
 import { PageHeader } from "@/components/layout/page-header"
+import { Button } from "@/components/ui/button"
 
 interface VendorProfile {
   id: string
@@ -184,6 +185,7 @@ export default function VendorDashboardPage() {
         <Tabs defaultValue="products" className="space-y-6">
           <TabsList>
             <TabsTrigger value="products">Products</TabsTrigger>
+            <TabsTrigger value="cards">Cards Shop</TabsTrigger>
             <TabsTrigger value="messages">Messages</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
@@ -231,6 +233,21 @@ export default function VendorDashboardPage() {
                 </Card>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="cards">
+            <Card>
+              <CardHeader>
+                <CardTitle>Cards Management</CardTitle>
+                <CardDescription>Manage your card inventory for the instant purchase shop</CardDescription>
+              </CardHeader>
+              <CardContent className="text-center py-8">
+                <Button onClick={() => router.push("/vendor/cards")}>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Go to Cards Dashboard
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="messages">

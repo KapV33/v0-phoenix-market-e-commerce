@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/marketplace/product-card"
 import { CartSidebar } from "@/components/marketplace/cart-sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Flame, LogOut, User, Wallet, Search, Shield, TrendingUp, Package, Grid, List } from "lucide-react"
+import { Flame, LogOut, User, Wallet, Search, Shield, TrendingUp, Package, Grid, List, CreditCard } from "lucide-react"
 import type { Product, Category, CartItem } from "@/lib/marketplace"
 import Link from "next/link"
 
@@ -141,6 +141,15 @@ export default function MarketPage() {
               </div>
             </Link>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/market/cards")}
+                className="border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Cards Shop
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
