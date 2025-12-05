@@ -18,7 +18,9 @@ export async function GET() {
       .from("commission_settings")
       .select("commission_percentage")
       .eq("setting_type", "global")
-      .single()
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     // Calculate stats
     const { data: escrows } = await supabase.from("escrows").select("amount, commission_amount, status")
